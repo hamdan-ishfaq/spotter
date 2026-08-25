@@ -107,7 +107,7 @@ function layoutRemarkPins(remarks: Remark[], baseY: number) {
     label: string;
     lane: number;
   }[] = [];
-  const laneHeight = 38;
+  const laneHeight = 46;
   const minGap = 48;
 
   for (const remark of remarks) {
@@ -205,11 +205,11 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
 
   const remarks = log.remarks;
   const remarksRulerY = GRID_TOP + GRID_H + 18;
-  // Keep pin origins below the REMARKS baseline so rotated labels hang downward
-  const pinBaseY = remarksRulerY + 14;
+  // First-lane tick tip clears the REMARKS baseline; labels hang downward from there
+  const pinBaseY = remarksRulerY + 20;
   const pins = layoutRemarkPins(remarks, pinBaseY);
   const pinDepth =
-    pins.length > 0 ? Math.max(...pins.map((p) => p.y)) - pinBaseY + 62 : 36;
+    pins.length > 0 ? Math.max(...pins.map((p) => p.y)) - pinBaseY + 70 : 36;
 
   const shippingY = pinBaseY + pinDepth + 6;
   const recapY = shippingY + 28;
@@ -704,9 +704,9 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
         <TimeRuler y={remarksRulerY} showLabels={false} />
 
         {pins.map((pin, i) => {
-          // Anchor just below the REMARKS axis; clockwise rotate hangs text down
-          const ax = pin.x + 2;
-          const ay = pin.y + 10;
+          // Tick tip = rotate origin; hanging baseline keeps glyphs entirely below
+          const ax = pin.x;
+          const ay = pin.y;
           return (
             <g key={`pin-${i}`}>
               <line
@@ -731,6 +731,8 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
                 fontSize="9"
                 fill={INK}
                 fontFamily={FONT}
+                textAnchor="start"
+                dominantBaseline="hanging"
                 style={{ transformOrigin: `${ax}px ${ay}px` }}
                 transform={`rotate(55 ${ax} ${ay})`}
               >
