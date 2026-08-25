@@ -1,0 +1,36 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+*.sqlite3
+
+# Node
+node_modules/
+dist/
+frontend/.env
+frontend/.env.local
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Build / logs / local QA artifacts (not committed)
+test_logs/
+DETAILED_TEST_REPORT.md
+BREAK_REPORT.md
+BREAK_REPORT_ROUND2.md
+*.log
+.coverage
+htmlcov/
+.pytest_cache/
+_live_*.py
+_live_*.json
+_live_*.html
+_live_*.js
+_live_*.txt
+_probe_live.py
