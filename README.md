@@ -84,6 +84,7 @@ https://openrouteservice.org/dev/#/signup → copy API key
 Render Free sleeps after ~15 minutes. The UI calls `/api/health/` on load. Optional: [cron-job.org](https://cron-job.org) ping health every 10–14 minutes during review.
 
 ## Assumptions (shown in UI)
+- **Assessment subset — not a full ELD** (no short-haul / adverse / split-sleeper)
 - Property-carrying, 70h/8-day, no adverse conditions
 - Starts after ≥10h off
 - 70/8 as remaining-hours pool (no prior day history)
@@ -93,10 +94,14 @@ Render Free sleeps after ~15 minutes. The UI calls `/api/health/` on load. Optio
 - Daily reset = 0.5h OFF + 9.5h SB
 - Home terminal TZ: America/Chicago
 
+## Architecture (for Loom / interview)
+
+See **[SYSTEM_ARCHITECTURE.md §1.1](./SYSTEM_ARCHITECTURE.md)** for sequence + component diagrams (planner → verifier → SVG logs). One-liner: *stateless free stack; all HOS math on the server; UI only paints.*
+
 ## Deliverables checklist
 - [x] GitHub-ready codebase — https://github.com/hamdan-ishfaq/spotter
 - [x] Local app + tests
 - [x] Hosted Vercel URL — https://spotter-hamdan-ishfaqs-projects.vercel.app
 - [x] Shareable trip links (query-string, no DB)
 - [x] Print-friendly daily logs
-- [ ] Loom 3–5 min walkthrough — see [LOOM_SCRIPT.md](./LOOM_SCRIPT.md)
+- [ ] Loom 3–5 minute walkthrough — see [LOOM_SCRIPT.md](./LOOM_SCRIPT.md) **(do this next)**

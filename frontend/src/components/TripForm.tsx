@@ -37,11 +37,12 @@ const DEMOS: Record<string, PlanRequest> = {
 
 type Props = {
   loading: boolean;
+  disabled?: boolean;
   onSubmit: (body: PlanRequest) => void;
   initial?: Partial<PlanRequest>;
 };
 
-export function TripForm({ loading, onSubmit, initial }: Props) {
+export function TripForm({ loading, disabled = false, onSubmit, initial }: Props) {
   const [current, setCurrent] = useState(initial?.current_location ?? "");
   const [pickup, setPickup] = useState(initial?.pickup_location ?? "");
   const [dropoff, setDropoff] = useState(initial?.dropoff_location ?? "");
@@ -88,7 +89,15 @@ export function TripForm({ loading, onSubmit, initial }: Props) {
     <Box>
       <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: "wrap", gap: 1 }} className="no-print">
         {Object.keys(DEMOS).map((k) => (
-          <Chip key={k} label={`Demo: ${k}`} onClick={() => applyDemo(k)} clickable color="secondary" variant="outlined" />
+          <Chip
+            key={k}
+            label={`Demo: ${k}`}
+            onClick={() => applyDemo(k)}
+            clickable={!disabled && !loading}
+            disabled={disabled || loading}
+            color="secondary"
+            variant="outlined"
+          />
         ))}
       </Stack>
       <Stack spacing={2}>
@@ -114,11 +123,11 @@ export function TripForm({ loading, onSubmit, initial }: Props) {
         <Button
           variant="contained"
           size="large"
-          disabled={!canSubmit || loading}
+          disabled={!canSubmit || loading || disabled}
           onClick={submit}
           startIcon={loading ? <CircularProgress size={18} color="inherit" /> : undefined}
         >
-          {loading ? "Planning…" : "Plan trip"}
+          {loading ? "Planning…" : disabled ? "Waiting for API…" : "Plan trip"}
         </Button>
       </Stack>
     </Box>

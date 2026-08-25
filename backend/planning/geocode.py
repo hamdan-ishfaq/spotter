@@ -107,38 +107,56 @@ def _label_city_state(city: str, state: str, fallback: str) -> str:
     city = (city or "").strip()
     state = _state_abbrev(state)
     if city and state:
-        # Prefer City, ST — drop "County" / "Township" style names when we have a city
-        if "county" in city.lower() or "township" in city.lower():
-            return f"{city}, {state}" if not state else f"{city}, {state}"
         return f"{city}, {state}"
     if city:
         return city
     return fallback
 
 
+def _is_county_like(name: str) -> bool:
+    low = (name or "").lower()
+    return "county" in low or "township" in low or "parish" in low
+
+
+def _prefer_municipality(*candidates: str) -> str:
+    """Pick first non-empty name that is not county/township-like."""
+    county_fallback = ""
+    for raw in candidates:
+        s = (raw or "").strip()
+        if not s:
+            continue
+        if _is_county_like(s):
+            if not county_fallback:
+                county_fallback = s
+            continue
+        return s
+    return county_fallback
+
+
 def _label_from_ors_props(props: dict, fallback: str) -> str:
-    city = (
-        props.get("locality")
-        or props.get("borough")
-        or props.get("municipality")
-        or ""
+    city = _prefer_municipality(
+        str(props.get("locality") or ""),
+        str(props.get("borough") or ""),
+        str(props.get("municipality") or ""),
+        str(props.get("localadmin") or ""),
     )
     # Avoid highway/road "name" as the primary city when locality exists
     if not city:
         name = str(props.get("name") or "")
         layer = str(props.get("layer") or props.get("type") or "").lower()
-        if name and layer in ("locality", "localadmin", "county", "region", "venue", ""):
-            # Skip obvious road-like names
+        if name and layer in ("locality", "localadmin", "venue", ""):
             if not any(
                 tok in name.lower()
                 for tok in ("interstate", "highway", "i-", "us-", "route", "road", "rd", "well")
-            ):
+            ) and not _is_county_like(name):
                 city = name
     region = props.get("region_a") or props.get("region") or ""
+    if city and region and not _is_county_like(city):
+        return _label_city_state(str(city), str(region), fallback)
     if city and region:
+        # County-only result — still return County, ST as last resort (caller may upgrade)
         return _label_city_state(str(city), str(region), fallback)
     if not city and region:
-        # County + state as last resort
         county = props.get("county") or props.get("name") or ""
         if county:
             return _label_city_state(str(county), str(region), fallback)
@@ -149,7 +167,14 @@ def _label_from_ors_props(props: dict, fallback: str) -> str:
             for part in parts[1:]:
                 abbr = _state_abbrev(part)
                 if len(abbr) == 2 and abbr.isalpha():
-                    return f"{parts[0]}, {abbr}"
+                    head = parts[0]
+                    if _is_county_like(head):
+                        for p in parts:
+                            if not _is_county_like(p) and p != part:
+                                # Prefer a non-county token if present
+                                if "united states" not in p.lower():
+                                    return f"{p}, {abbr}"
+                    return f"{head}, {abbr}"
             for part in parts[1:]:
                 low = part.lower()
                 if "county" in low or "township" in low or "united states" in low:
@@ -162,15 +187,18 @@ def _label_from_ors_props(props: dict, fallback: str) -> str:
 
 def _label_from_nominatim(item: dict, fallback: str) -> str:
     addr = item.get("address") or {}
-    city = (
-        addr.get("city")
-        or addr.get("town")
-        or addr.get("village")
-        or addr.get("hamlet")
-        or addr.get("municipality")
-        or addr.get("county")
-        or ""
+    city = _prefer_municipality(
+        str(addr.get("city") or ""),
+        str(addr.get("town") or ""),
+        str(addr.get("village") or ""),
+        str(addr.get("hamlet") or ""),
+        str(addr.get("municipality") or ""),
+        str(addr.get("city_district") or ""),
+        str(addr.get("suburb") or ""),
     )
+    # Only fall back to county if no municipality at all
+    if not city:
+        city = str(addr.get("county") or "")
     state = addr.get("state_code") or addr.get("state") or ""
     if city and state:
         return _label_city_state(str(city), str(state), fallback)
@@ -180,7 +208,11 @@ def _label_from_nominatim(item: dict, fallback: str) -> str:
         for part in parts[1:]:
             abbr = _state_abbrev(part)
             if len(abbr) == 2 and abbr.isalpha() and abbr in US_STATE_ABBREV.values():
-                return f"{parts[0]}, {abbr}"
+                head = next(
+                    (p for p in parts if not _is_county_like(p) and "united states" not in p.lower()),
+                    parts[0],
+                )
+                return f"{head}, {abbr}"
         return f"{parts[0]}, {parts[1]}"
     return parts[0] if parts else fallback
 
@@ -319,6 +351,7 @@ def _reverse_ors(point: LatLng) -> str | None:
 def _reverse_nominatim(point: LatLng) -> str | None:
     try:
         with httpx.Client(timeout=8.0, headers={"User-Agent": USER_AGENT}) as client:
+            # zoom 10 ≈ city; 8 was too coarse (county-level too often)
             r = client.get(
                 f"{NOMINATIM}/reverse",
                 params={
@@ -326,7 +359,7 @@ def _reverse_nominatim(point: LatLng) -> str | None:
                     "lon": point.lng,
                     "format": "json",
                     "addressdetails": 1,
-                    "zoom": 8,
+                    "zoom": 10,
                 },
             )
             if r.status_code != 200:
@@ -354,7 +387,7 @@ def _nearest_known_label(point: LatLng) -> str | None:
 
 
 def reverse_geocode_label(point: LatLng, fallback: str = "") -> str:
-    """Human label for a coordinate (City, ST). Cached ~1km grid."""
+    """Human label for a coordinate (prefer City, ST). Cached ~1km grid."""
     cache_key = f"rev:{round(point.lat, 2)}:{round(point.lng, 2)}"
     cached = reverse_cache.get(cache_key)
     if cached is not None:
@@ -367,6 +400,12 @@ def reverse_geocode_label(point: LatLng, fallback: str = "") -> str:
         or fallback
         or f"{point.lat:.2f}, {point.lng:.2f}"
     )
+    # If reverse only gave County, ST, prefer a nearby known city when close
+    if _is_county_like(label.split(",")[0] if label else ""):
+        near = _nearest_known_label(point)
+        if near and not _is_county_like(near.split(",")[0]):
+            label = near
+
     reverse_cache.set(cache_key, label)
     return label
 

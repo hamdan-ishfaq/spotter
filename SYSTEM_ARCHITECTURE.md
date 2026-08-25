@@ -27,6 +27,68 @@ The assessment is not a SaaS platform. It is a **single-purpose planning engine*
 
 ---
 
+## 1.1 Reviewer architecture (one page)
+
+Use this diagram in Loom / interviews. It is the whole system.
+
+```mermaid
+sequenceDiagram
+  participant U as ReviewerBrowser
+  participant FE as VercelReactSPA
+  participant API as RenderDjangoAPI
+  participant GEO as ORS_or_Nominatim_OSRM
+  participant ENG as PlannerPlusVerifier
+
+  U->>FE: Open app
+  FE->>API: GET /api/health/ wake
+  API-->>FE: ok
+  U->>FE: Plan trip Short_Long_Cycle
+  FE->>API: POST /api/plan/
+  API->>GEO: Geocode plus route
+  GEO-->>API: Places plus polyline
+  API->>ENG: Build duty timeline
+  ENG->>ENG: verify hard gates
+  ENG-->>API: Legal timeline plus logs
+  API-->>FE: JSON summary route instructions daily_logs
+  FE-->>U: Map plus instructions plus SVG paper logs
+```
+
+```mermaid
+flowchart TB
+  subgraph fe [Frontend_Vercel]
+    Form[TripForm demos shareUrl]
+    Map[RouteMap Leaflet]
+    Instr[InstructionList]
+    Logs[DailyLogSheet SVG]
+  end
+
+  subgraph api [Backend_Render]
+    Views[DRF health autocomplete plan]
+    Geo[geocode.py routing.py]
+    Plan[hos_planner.py]
+    Ver[hos_verifier.py]
+    Build[logs_builder.py instructions.py]
+  end
+
+  Form -->|POST /api/plan/| Views
+  Views --> Geo --> Plan --> Ver
+  Ver -->|reject if illegal| Views
+  Plan --> Build --> Views
+  Views -->|JSON| Map
+  Views --> Instr
+  Views --> Logs
+```
+
+### Why planner AND verifier
+- **Planner** inserts breaks, fuel, 10h resets, 34h restarts while building the trip.
+- **Verifier** re-simulates clocks independently (11h / 14h / 8h+30m / 70h / fuel / PU-DO / day totals). Illegal timelines never leave the API.
+- UI does **zero** HOS math — it only paints `grid_segments` and remarks.
+
+### Why not split sleeper / short-haul / adverse
+Assessment scope is property-carrying **70h/8-day** with transparent assumptions. Split sleeper (§395.1(g)), short-haul, and adverse +2h are real FMCSA rules but **out of scope** here — implementing them late adds risk without matching the grading bar. Disclosed in `assumptions[]` and the UI Scope banner.
+
+---
+
 ## 2. High-level system context
 
 ```mermaid

@@ -233,3 +233,35 @@ class VerifierTests(SimpleTestCase):
         ]
         v = verify(timeline, 0)
         self.assertFalse(any(x.code == "RESET_10" for x in v))
+
+    def test_consecutive_on_duty_can_satisfy_30m_break(self):
+        """FMCSA: 30m break may be ON (not driving), e.g. fuel, if consecutive ≥30m."""
+        t0 = datetime(2026, 8, 25, 6, 0, tzinfo=TZ)
+        timeline = [
+            seg("ON", t0, 1.0, stop_type="pickup", remark="Pickup", stationary=True),
+            seg("D", t0 + timedelta(hours=1), 8.0, miles=400),
+            seg(
+                "ON",
+                t0 + timedelta(hours=9),
+                0.5,
+                stop_type="fuel",
+                remark="Fuel",
+                stationary=True,
+            ),
+            seg("D", t0 + timedelta(hours=9.5), 2.0, miles=100),
+            seg(
+                "ON",
+                t0 + timedelta(hours=11.5),
+                1.0,
+                stop_type="dropoff",
+                remark="Dropoff",
+                stationary=True,
+            ),
+        ]
+        v = verify(timeline, 0)
+        self.assertFalse(any(x.code == "BREAK_8" for x in v))
+        self.assertFalse(any(x.code == "DRIVE_11" for x in v))
+
+    def test_empty_timeline_violates(self):
+        v = verify([], 0)
+        self.assertTrue(any(x.code == "SEG_ORDER" for x in v))

@@ -99,6 +99,14 @@ function hourLabel(h: number): string {
   return String(h);
 }
 
+function pinDisplayLabel(label: string): string {
+  // Compact FMCSA-ish pin text: "San Bernardino County, CA" → "San Bernardino Co., CA"
+  return label
+    .replace(/\bCounty\b/gi, "Co.")
+    .replace(/\bTownship\b/gi, "Twp.")
+    .replace(/\bParish\b/gi, "Par.");
+}
+
 /**
  * Remarks timeline pins (FMCSA-style City, ST markers).
  * - One pin per location *change* (collapses back-to-back same-city events).
@@ -112,16 +120,17 @@ function layoutRemarkPins(remarks: Remark[], baseY: number) {
     lane: number;
     gap: number;
   }[] = [];
-  const laneHeight = 48;
+  const laneHeight = 50;
   const maxLanes = 5;
   let lastLoc = "";
 
   for (const remark of remarks) {
     const loc = (remark.location_label || "").trim();
-    const label = loc && loc !== "—" ? loc : shortText(remark.text, 24);
-    if (!label) {
+    const raw = loc && loc !== "—" ? loc : shortText(remark.text, 24);
+    if (!raw) {
       continue;
     }
+    const label = pinDisplayLabel(raw);
     // Skip repeated same location (many duty changes at one stop)
     if (label === lastLoc) {
       continue;
@@ -130,7 +139,7 @@ function layoutRemarkPins(remarks: Remark[], baseY: number) {
 
     const x = xAt(timeToMinute(remark.time));
     // Diagonal ~55°: longer names need more horizontal clearance
-    const gap = Math.max(56, Math.min(140, label.length * 3.6));
+    const gap = Math.max(60, Math.min(150, label.length * 3.8));
 
     let lane = 0;
     for (;;) {
@@ -140,12 +149,10 @@ function layoutRemarkPins(remarks: Remark[], baseY: number) {
         if (dx >= need) {
           return false;
         }
-        // Same lane always clashes when too close
         if (p.lane === lane) {
           return true;
         }
-        // Adjacent lanes still collide when almost on top of each other
-        if (Math.abs(p.lane - lane) === 1 && dx < need * 0.55) {
+        if (Math.abs(p.lane - lane) === 1 && dx < need * 0.6) {
           return true;
         }
         return false;
@@ -238,9 +245,8 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
   // Short leader to tick tip; label baseline offset inside rotate() keeps glyphs below axis
   const pinBaseY = remarksRulerY + 10;
   const pins = layoutRemarkPins(remarks, pinBaseY);
-  // Extra room for diagonal labels + multi-lane stagger on dense days
   const pinDepth =
-    pins.length > 0 ? Math.max(...pins.map((p) => p.y)) - pinBaseY + 100 : 40;
+    pins.length > 0 ? Math.max(...pins.map((p) => p.y)) - pinBaseY + 110 : 44;
 
   const shippingY = pinBaseY + pinDepth + 6;
   const recapY = shippingY + 28;

@@ -34,6 +34,17 @@ This is Spotter AI’s **Remote FullStack Engineer (React + Django – AI System
 
 **Core loop:** `User inputs → Django plans legally → JSON → React paints map + instructions + daily logs`
 
+### 60-second interview pitch (memorize)
+
+1. **Stateless free stack:** Vercel SPA + Render Django; no DB.
+2. **Plan path:** geocode/route → `hos_planner` builds a legal duty timeline → `hos_verifier` independently checks 11/14/8+30m/70+34/fuel/PU-DO → JSON.
+3. **UI paints only:** map polyline, instruction list, FMCSA-style SVG daily logs (`grid_segments`).
+4. **Honesty:** 70/8 is a remaining-hours pool from `cycle_used` (not full 8-day history); no split sleeper / short-haul / adverse — assessment subset, disclosed in assumptions.
+5. **Demos:** Short (1 day), Long (multi-day + fuel), Cycle (34h restart).
+
+### Why not split sleeper berth
+FMCSA §395.1(g) split sleeper is real and complex (paired 7h+2h windows excluded from 14h). This app uses **full ≥10h OFF+SB resets** and **34h SB restarts** only — simpler, testable, and aligned to the assessment’s golden demos. Stated in assumptions so reviewers don’t think we forgot it.
+
 ---
 
 ## 1. Current state (handoff snapshot)

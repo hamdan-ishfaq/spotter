@@ -5,6 +5,7 @@ import {
   Button,
   Container,
   Grid,
+  LinearProgress,
   Paper,
   Stack,
   Tab,
@@ -145,8 +146,12 @@ export default function App() {
 
         {apiReady === "waking" && (
           <Alert severity="info" sx={{ mb: 2 }}>
-            Starting API{isHosted ? " on Render Free" : ""} — first load may take
-            up to ~60s while the server wakes{wakeAttempt > 1 ? " (retrying…)" : ""}.
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              Waking API{isHosted ? " on Render Free" : ""}
+              {wakeAttempt > 1 ? ` (attempt ${wakeAttempt})` : ""} — cold start can take
+              up to ~60s. Plan is disabled until the server responds.
+            </Typography>
+            <LinearProgress />
           </Alert>
         )}
         {apiReady === "down" && (
@@ -167,7 +172,7 @@ export default function App() {
             {isHosted ? (
               <>
                 API not reachable at <code>{API_BASE_URL}</code>. Render Free
-                sleeps after idle — click Retry or wait a minute.
+                sleeps after idle — click Retry or wait a minute, then Plan again.
               </>
             ) : (
               <>
@@ -177,10 +182,16 @@ export default function App() {
             )}
           </Alert>
         )}
+        {apiReady === "ready" && isHosted && wakeAttempt <= 1 && (
+          <Alert severity="success" sx={{ mb: 2 }}>
+            API ready — use Short / Long / Cycle demos for a reliable reviewer walkthrough.
+          </Alert>
+        )}
 
         <Paper sx={{ p: 3, mb: 3 }} elevation={0} variant="outlined">
           <TripForm
             loading={loading}
+            disabled={apiReady !== "ready"}
             onSubmit={onSubmit}
             initial={initialFromUrl ?? undefined}
           />
@@ -195,8 +206,11 @@ export default function App() {
       {plan && (
         <Container maxWidth="lg">
           <Alert severity="info" sx={{ mb: 2 }} className="no-print">
+            <strong>Scope:</strong> Property-carrying 70h/8-day assessment subset — not a
+            full ELD (no short-haul / adverse / split-sleeper).{" "}
             <strong>Assumptions:</strong> {(plan.assumptions || []).join(" · ")}
           </Alert>
+          {loading && <LinearProgress sx={{ mb: 2 }} className="no-print" />}
 
           <Stack
             direction="row"

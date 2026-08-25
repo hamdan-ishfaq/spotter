@@ -515,6 +515,7 @@ def plan_trip(
     )
 
     assumptions = [
+        "Assessment subset — not a full ELD product (no short-haul / adverse / split-sleeper)",
         "Property-carrying driver, 70h/8-day cycle",
         "No adverse driving conditions",
         "Driver starts after ≥10 consecutive hours off",
