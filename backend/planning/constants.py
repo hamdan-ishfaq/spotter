@@ -22,9 +22,13 @@ ORS_PROFILE_FALLBACK = "driving-car"
 
 CARRIER_NAME = "Spotter Demo Carrier"
 MAIN_OFFICE = "Chicago, IL"
+HOME_TERMINAL_ADDRESS = "Chicago, IL"
 VEHICLE_NUMBER = "DEMO-401 / TRL-100"
 CO_DRIVER = "N/A"
 SHIPPER = "Demo Shipper"
 COMMODITY = "General freight"
 LOAD_ID = "DEMO-LOAD"
 DRIVER_NAME = "Demo Driver"
+# Calendar day / RODS 24-hour period starts at midnight home-terminal time
+PERIOD_START_TIME = "Midnight"
+PERIOD_START_LABEL = "Midnight (home terminal)"

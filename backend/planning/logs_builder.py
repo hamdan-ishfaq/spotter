@@ -13,9 +13,12 @@ from .constants import (
     CYCLE_LIMIT_HOURS,
     DRAW_TICK_MINUTES,
     DRIVER_NAME,
+    HOME_TERMINAL_ADDRESS,
     HOME_TERMINAL_TZ,
     LOAD_ID,
     MAIN_OFFICE,
+    PERIOD_START_LABEL,
+    PERIOD_START_TIME,
     SHIPPER,
     VEHICLE_NUMBER,
 )
@@ -32,6 +35,13 @@ IMPORTANT_STOPS = {
     "rest_off",
     "rest_sb",
     "restart_34",
+}
+
+STATUS_REMARK = {
+    "OFF": "Off duty",
+    "SB": "Sleeper berth",
+    "D": "Driving",
+    "ON": "On duty (not driving)",
 }
 
 
@@ -213,31 +223,27 @@ def build_daily_logs(
 
         remarks: list[Remark] = []
         prev_status = None
-        prev_stop = None
         for s in padded:
-            if not s.remark:
-                prev_status = s.status
-                prev_stop = s.stop_type
-                continue
-            changed = s.status != prev_status or s.stop_type != prev_stop
+            status_changed = prev_status is None or s.status != prev_status
             important = s.stop_type in IMPORTANT_STOPS
-            if changed or important:
-                # Deduplicate identical consecutive remarks
+            # FMCSA §395.8: city/state in Remarks on every change of duty status
+            if status_changed or important:
+                text = (s.remark or "").strip() or STATUS_REMARK.get(s.status, s.status)
+                loc = (s.location_label or "").strip() or "—"
                 if not (
                     remarks
                     and remarks[-1].time == s.start.strftime("%H:%M")
-                    and remarks[-1].text == s.remark
-                    and remarks[-1].location_label == s.location_label
+                    and remarks[-1].text == text
+                    and remarks[-1].location_label == loc
                 ):
                     remarks.append(
                         Remark(
                             time=s.start.strftime("%H:%M"),
-                            location_label=s.location_label,
-                            text=s.remark,
+                            location_label=loc,
+                            text=text,
                         )
                     )
             prev_status = s.status
-            prev_stop = s.stop_type
 
         grid: list[GridSeg] = []
         for s in padded:
@@ -272,6 +278,26 @@ def build_daily_logs(
         miles = round(sum(s.miles for s in padded), 1)
         on_duty_today = round(totals["drive"] + totals["on"], 2)
 
+        rem_start = round(
+            cycle_by_day_start.get(day, CYCLE_LIMIT_HOURS - cycle_used_at_start),
+            2,
+        )
+        rem_end = round(
+            cycle_by_day_end.get(day, CYCLE_LIMIT_HOURS - cycle_used_at_start),
+            2,
+        )
+        # FMCSA recap A/B/C for 70h/8-day (approx without full prior RODS)
+        # A = total on-duty hours in current 8-day window including today
+        # B = hours available tomorrow (70 − A)
+        # C = approx on-duty last 7 days including today
+        a_70 = round(max(0.0, min(CYCLE_LIMIT_HOURS, CYCLE_LIMIT_HOURS - rem_end)), 2)
+        b_70 = round(max(0.0, rem_end), 2)
+        # Drop one average prior day from the 8-day pool when estimating 7-day C
+        prior_avg = (
+            round(cycle_used_at_start / 8.0, 2) if cycle_used_at_start > 0 else 0.0
+        )
+        c_70 = round(max(0.0, a_70 - prior_avg), 2)
+
         logs.append(
             DailyLog(
                 date=day.isoformat(),
@@ -283,22 +309,27 @@ def build_daily_logs(
                 remarks=remarks,
                 recap={
                     "on_duty_today": on_duty_today,
-                    "cycle_remaining_start": round(
-                        cycle_by_day_start.get(
-                            day, CYCLE_LIMIT_HOURS - cycle_used_at_start
-                        ),
-                        2,
+                    "cycle_remaining_start": rem_start,
+                    "cycle_remaining_end": rem_end,
+                    "a_70_8": a_70,
+                    "b_70_8": b_70,
+                    "c_70_8": c_70,
+                    "a_60_7": None,
+                    "b_60_7": None,
+                    "c_60_7": None,
+                    "note": (
+                        "70/8 A/B/C approx from cycle clocks — "
+                        "full 8-day prior RODS not provided; carrier uses 70/8"
                     ),
-                    "cycle_remaining_end": round(
-                        cycle_by_day_end.get(day, CYCLE_LIMIT_HOURS - cycle_used_at_start),
-                        2,
-                    ),
-                    "note": "Approximate — full 8-day history not provided",
                 },
                 grid_segments=grid,
                 header={
                     "carrier_name": CARRIER_NAME,
                     "main_office": MAIN_OFFICE,
+                    "home_terminal": HOME_TERMINAL_ADDRESS,
+                    "period_start_time": PERIOD_START_TIME,
+                    "period_start_label": PERIOD_START_LABEL,
+                    "time_zone": HOME_TERMINAL_TZ,
                     "vehicle_number": VEHICLE_NUMBER,
                     "co_driver": CO_DRIVER,
                     "shipper": SHIPPER,

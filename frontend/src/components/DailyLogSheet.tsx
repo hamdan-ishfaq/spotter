@@ -20,6 +20,12 @@ export type DailyLog = {
     on_duty_today: number;
     cycle_remaining_start: number;
     cycle_remaining_end: number;
+    a_70_8?: number;
+    b_70_8?: number;
+    c_70_8?: number;
+    a_60_7?: number | null;
+    b_60_7?: number | null;
+    c_60_7?: number | null;
     note: string;
   };
   grid_segments: GridSeg[];
@@ -41,7 +47,7 @@ const TOTAL_W = 88;
 const GRID_LEFT = LABEL_W + 6;
 const GRID_RIGHT = W - TOTAL_W - 12;
 const GRID_W = GRID_RIGHT - GRID_LEFT;
-const HEADER_H = 168;
+const HEADER_H = 198;
 const GRID_TOP = HEADER_H + 22;
 const GRID_H = 184;
 const ROW_H = GRID_H / 4;
@@ -66,7 +72,10 @@ function timeToMinute(time: string): number {
   return (h ?? 0) * 60 + (m ?? 0);
 }
 
-function fmtHours(h: number): string {
+function fmtHours(h: number | null | undefined): string {
+  if (h == null || Number.isNaN(h)) {
+    return "—";
+  }
   const q = Math.round(h * 4) / 4;
   if (Number.isInteger(q)) {
     return String(q);
@@ -127,9 +136,7 @@ function layoutRemarks(remarks: Remark[], baseY: number) {
     let lane = 0;
     for (;;) {
       const y = baseY + lane * laneHeight;
-      const clash = slots.some(
-        (s) => s.lane === lane && Math.abs(s.x - x) < minGap,
-      );
+      const clash = slots.some((s) => s.lane === lane && Math.abs(s.x - x) < minGap);
       if (!clash) {
         slots.push({ x, y, remark, lane });
         break;
@@ -153,10 +160,24 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
       ? Math.max(...remarkSlots.map((s) => s.y)) - remarkBaseY + 64
       : 48;
   const recapY = remarkBaseY + remarkDepth + 12;
-  const svgH = recapY + 88;
+  const RECAP_H = 118;
+  const svgH = recapY + RECAP_H + 18;
 
   const grandTotal =
     log.totals.off + log.totals.sb + log.totals.drive + log.totals.on;
+
+  const a70 =
+    log.recap.a_70_8 ??
+    Math.max(0, 70 - (log.recap.cycle_remaining_end ?? 0));
+  const b70 = log.recap.b_70_8 ?? log.recap.cycle_remaining_end;
+  const c70 = log.recap.c_70_8 ?? a70;
+
+  const periodLabel =
+    log.header.period_start_label ||
+    log.header.period_start_time ||
+    "Midnight (home terminal)";
+  const homeTerminal = log.header.home_terminal || log.header.main_office || "—";
+  const tz = log.header.time_zone || "America/Chicago";
 
   const transitionDots: { x: number; y: number }[] = [];
   log.grid_segments.forEach((g, idx) => {
@@ -194,7 +215,6 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
       >
         <rect x="0" y="0" width={W} height={svgH} fill="#ffffff" />
 
-        {/* Title + date block */}
         <text
           x="14"
           y="26"
@@ -206,7 +226,7 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
           Driver&apos;s Daily Log
         </text>
         <text x="14" y="44" fontSize="11" fill="#64748b" fontFamily="Arial, sans-serif">
-          (24 Hours)
+          (One Calendar Day — 24 Hours)
         </text>
 
         <text x={CX - 60} y="22" fontSize="10" fill="#64748b" fontFamily="Arial, sans-serif">
@@ -223,14 +243,7 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
         >
           {month}
         </text>
-        <line
-          x1={CX - 88}
-          y1={42}
-          x2={CX - 32}
-          y2={42}
-          stroke="#94a3b8"
-          strokeWidth="0.8"
-        />
+        <line x1={CX - 88} y1={42} x2={CX - 32} y2={42} stroke="#94a3b8" strokeWidth="0.8" />
 
         <text x={CX - 8} y="22" fontSize="10" fill="#64748b" fontFamily="Arial, sans-serif">
           (Day)
@@ -265,23 +278,32 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
         <line x1={CX + 16} y1={42} x2={CX + 72} y2={42} stroke="#94a3b8" strokeWidth="0.8" />
 
         <text x={W - 14} y="22" fontSize="9" fill="#64748b" textAnchor="end" fontFamily="Arial, sans-serif">
-          ORIGINAL — file at end of trip · DUPLICATE — driver retains 8 days
+          ORIGINAL — Submit to carrier within 13 days
         </text>
         <text x={W - 14} y="36" fontSize="8" fill="#64748b" textAnchor="end" fontFamily="Arial, sans-serif">
-          U.S. DOT · FMCSA Driver&apos;s Daily Log · Time base: Home Terminal (America/Chicago)
+          DUPLICATE — Driver retains for 8 days · U.S. DOT / FMCSA
         </text>
 
-        {/* Header fields */}
         <UnderlineField x={14} y={58} width={320} label="From:" value={log.from_location} />
+        <UnderlineField x={360} y={58} width={320} label="To:" value={log.to_location} />
         <UnderlineField
-          x={360}
+          x={700}
           y={58}
-          width={320}
-          label="To:"
-          value={log.to_location}
+          width={260}
+          label="24-hour period starting time:"
+          value={periodLabel}
+          valueSize={10}
         />
 
-        <rect x={14} y={88} width={148} height={52} fill={GRID_BLUE_LIGHT} stroke={GRID_BLUE} strokeWidth="0.8" />
+        <rect
+          x={14}
+          y={88}
+          width={148}
+          height={52}
+          fill={GRID_BLUE_LIGHT}
+          stroke={GRID_BLUE}
+          strokeWidth="0.8"
+        />
         <text x={22} y={104} fontSize="9" fill="#475569" fontFamily="Arial, sans-serif">
           Total Miles Driving Today
         </text>
@@ -289,7 +311,15 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
           {log.total_miles_driving}
         </text>
 
-        <rect x={170} y={88} width={148} height={52} fill={GRID_BLUE_LIGHT} stroke={GRID_BLUE} strokeWidth="0.8" />
+        <rect
+          x={170}
+          y={88}
+          width={148}
+          height={52}
+          fill={GRID_BLUE_LIGHT}
+          stroke={GRID_BLUE}
+          strokeWidth="0.8"
+        />
         <text x={178} y={104} fontSize="9" fill="#475569" fontFamily="Arial, sans-serif">
           Truck / Tractor &amp; Trailer No.
         </text>
@@ -336,11 +366,26 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
           value={log.header.driver_name}
         />
         <UnderlineField
-          x={360}
+          x={330}
           y={148}
-          width={200}
+          width={160}
           label="Co-Driver:"
           value={log.header.co_driver}
+        />
+        <UnderlineField
+          x={510}
+          y={148}
+          width={220}
+          label="Home Terminal Address:"
+          value={homeTerminal}
+        />
+        <UnderlineField
+          x={750}
+          y={148}
+          width={210}
+          label="Time base (home terminal):"
+          value={tz}
+          valueSize={10}
         />
 
         {/* Time header bar */}
@@ -359,7 +404,7 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
               />
               {h < 24 && hourLabel(h) && (
                 <text
-                  x={x + (h === 12 ? -12 : 2)}
+                  x={x + (h === 12 || h === 0 ? -10 : 2)}
                   y={GRID_TOP - 7}
                   fontSize="8"
                   fill="#fff"
@@ -372,7 +417,6 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
           );
         })}
 
-        {/* 15-minute ticks */}
         {Array.from({ length: 96 }, (_, i) => {
           const x = xAt(i * 15);
           return (
@@ -388,7 +432,6 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
           );
         })}
 
-        {/* Row labels + horizontal dividers */}
         {ROW_LABELS.map((lines, i) => {
           const y = GRID_TOP + i * ROW_H;
           return (
@@ -428,7 +471,6 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
           strokeWidth="1.4"
         />
 
-        {/* Alternate row shading */}
         {[0, 2].map((i) => (
           <rect
             key={i}
@@ -441,7 +483,6 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
           />
         ))}
 
-        {/* Duty status line */}
         {log.grid_segments.map((g, idx) => {
           const y = yRow(g.status);
           const x1 = xAt(g.start_minute);
@@ -481,12 +522,18 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
           );
         })}
 
-        {/* Transition dots */}
         {transitionDots.map((dot, i) => (
-          <circle key={i} cx={dot.x} cy={dot.y} r="3.2" fill={DOT_RED} stroke="#fff" strokeWidth="0.6" />
+          <circle
+            key={i}
+            cx={dot.x}
+            cy={dot.y}
+            r="3.2"
+            fill={DOT_RED}
+            stroke="#fff"
+            strokeWidth="0.6"
+          />
         ))}
 
-        {/* Totals column */}
         <text
           x={GRID_RIGHT + 10}
           y={GRID_TOP - 7}
@@ -547,7 +594,6 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
           = {fmtHours(grandTotal)}
         </text>
 
-        {/* Remarks timeline */}
         <text
           x={GRID_LEFT}
           y={remarkBaseY}
@@ -557,6 +603,15 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
           fontFamily="Arial, sans-serif"
         >
           REMARKS
+        </text>
+        <text
+          x={GRID_LEFT + 78}
+          y={remarkBaseY}
+          fontSize="9"
+          fill="#64748b"
+          fontFamily="Arial, sans-serif"
+        >
+          City / State at each change of duty status (home terminal time)
         </text>
         <line
           x1={GRID_LEFT}
@@ -616,41 +671,109 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
           );
         })}
 
-        {/* Recap footer */}
+        {/* Recap: FMCSA A/B/C style */}
         <rect
           x={14}
           y={recapY}
           width={W - 28}
-          height={72}
+          height={RECAP_H}
           fill="#f8fafc"
           stroke="#cbd5e1"
           strokeWidth="0.8"
           rx="2"
         />
-        <text x={24} y={recapY + 18} fontSize="10" fontWeight="700" fill={INK} fontFamily="Arial, sans-serif">
-          Recap — 70 Hour / 8 Day (approx.)
+        <text x={24} y={recapY + 16} fontSize="10" fontWeight="700" fill={INK} fontFamily="Arial, sans-serif">
+          Recap: Complete at end of day
         </text>
-        <text x={24} y={recapY + 34} fontSize="10" fill="#334155" fontFamily="Arial, sans-serif">
-          On duty today (lines 3 &amp; 4): {fmtHours(log.recap.on_duty_today)} h
+        <text x={24} y={recapY + 32} fontSize="10" fill="#334155" fontFamily="Arial, sans-serif">
+          On duty hours today (Total lines 3 &amp; 4): {fmtHours(log.recap.on_duty_today)} h
         </text>
-        <text x={24} y={recapY + 50} fontSize="10" fill="#334155" fontFamily="Arial, sans-serif">
-          Cycle remaining — start {fmtHours(log.recap.cycle_remaining_start)} h · end{" "}
-          {fmtHours(log.recap.cycle_remaining_end)} h · {log.recap.note}
+
+        {/* 70/8 columns */}
+        <text x={24} y={recapY + 52} fontSize="9" fontWeight="700" fill={HEADER_BAR} fontFamily="Arial, sans-serif">
+          70 Hour / 8 Day Drivers
         </text>
+        {[
+          ["A", a70, "Total hours on duty last 8 days including today"],
+          ["B", b70, "Total hours available tomorrow (70 − A)"],
+          ["C", c70, "Total hours on duty last 7 days including today"],
+        ].map(([letter, val, desc], i) => (
+          <g key={String(letter)}>
+            <rect
+              x={24 + i * 150}
+              y={recapY + 58}
+              width={140}
+              height={36}
+              fill="#fff"
+              stroke={GRID_BLUE}
+              strokeWidth="0.8"
+            />
+            <text
+              x={32 + i * 150}
+              y={recapY + 72}
+              fontSize="10"
+              fontWeight="700"
+              fill={INK}
+              fontFamily="Arial, sans-serif"
+            >
+              {letter}: {fmtHours(val as number)}
+            </text>
+            <text
+              x={32 + i * 150}
+              y={recapY + 86}
+              fontSize="7.5"
+              fill="#64748b"
+              fontFamily="Arial, sans-serif"
+            >
+              {desc as string}
+            </text>
+          </g>
+        ))}
+
+        {/* 60/7 — carrier uses 70/8 */}
+        <text x={500} y={recapY + 52} fontSize="9" fontWeight="700" fill="#94a3b8" fontFamily="Arial, sans-serif">
+          60 Hour / 7 Day Drivers
+        </text>
+        {["A", "B", "C"].map((letter, i) => (
+          <g key={`60-${letter}`}>
+            <rect
+              x={500 + i * 88}
+              y={recapY + 58}
+              width={80}
+              height={36}
+              fill="#f1f5f9"
+              stroke="#cbd5e1"
+              strokeWidth="0.8"
+            />
+            <text
+              x={508 + i * 88}
+              y={recapY + 78}
+              fontSize="11"
+              fill="#94a3b8"
+              fontFamily="Arial, sans-serif"
+            >
+              {letter}: —
+            </text>
+          </g>
+        ))}
+        <text x={500} y={recapY + 106} fontSize="8" fill="#94a3b8" fontFamily="Arial, sans-serif">
+          N/A — carrier operates on 70/8 schedule
+        </text>
+
         <text
           x={W - 24}
-          y={recapY + 34}
+          y={recapY + 32}
           fontSize="9"
           fill="#64748b"
           fontFamily="Arial, sans-serif"
           fontStyle="italic"
           textAnchor="end"
         >
-          I certify these entries are true and correct
+          I certify that these entries are true and correct
         </text>
         <text
           x={W - 24}
-          y={recapY + 50}
+          y={recapY + 48}
           fontSize="10"
           fill={INK}
           fontFamily="Arial, sans-serif"
@@ -660,7 +783,11 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
           {log.header.driver_name}
         </text>
 
-        <text x={14} y={svgH - 8} fontSize="8" fill="#94a3b8" fontFamily="Arial, sans-serif">
+        <text x={24} y={recapY + RECAP_H - 8} fontSize="8" fill="#94a3b8" fontFamily="Arial, sans-serif">
+          {log.recap.note}
+        </text>
+
+        <text x={14} y={svgH - 6} fontSize="8" fill="#94a3b8" fontFamily="Arial, sans-serif">
           FMCSA-style grid · 15-minute increments · blue line = duty status · red dots = transitions
         </text>
       </svg>
