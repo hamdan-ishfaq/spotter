@@ -15,5 +15,11 @@
 
   .daily-log-sheet {
     break-inside: avoid;
+    box-shadow: none !important;
+    border: 1px solid #000 !important;
+  }
+
+  .daily-log-sheet svg {
+    min-width: 0 !important;
   }
 }

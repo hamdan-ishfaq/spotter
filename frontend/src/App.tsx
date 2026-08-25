@@ -251,13 +251,27 @@ export default function App() {
             </Grid>
           </Grid>
 
-          <Typography variant="h3" sx={{ fontSize: "1.4rem", mb: 1 }} className="no-print">
+          <Typography
+            variant="h3"
+            sx={{ fontSize: "1.4rem", mb: 1, fontWeight: 600 }}
+            className="no-print"
+          >
             Daily log sheets
+          </Typography>
+          <Typography
+            color="text.secondary"
+            sx={{ mb: 2, maxWidth: 640, fontSize: "0.95rem" }}
+            className="no-print"
+          >
+            FMCSA-style 24-hour grids with duty line, totals, and location remarks — use Print logs for a clean PDF.
           </Typography>
           <Tabs
             value={logTab}
             onChange={(_, v) => setLogTab(v)}
-            sx={{ mb: 2 }}
+            sx={{
+              mb: 2,
+              "& .MuiTab-root": { fontWeight: 500, textTransform: "none" },
+            }}
             className="no-print"
             variant="scrollable"
           >
