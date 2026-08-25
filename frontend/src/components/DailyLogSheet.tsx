@@ -107,8 +107,8 @@ function layoutRemarkPins(remarks: Remark[], baseY: number) {
     label: string;
     lane: number;
   }[] = [];
-  const laneHeight = 46;
-  const minGap = 48;
+  const laneHeight = 40;
+  const minGap = 52;
 
   for (const remark of remarks) {
     const loc = (remark.location_label || "").trim();
@@ -120,7 +120,7 @@ function layoutRemarkPins(remarks: Remark[], baseY: number) {
     let lane = 0;
     for (;;) {
       const clash = pins.some((p) => p.lane === lane && Math.abs(p.x - x) < minGap);
-      if (!clash || lane >= 5) {
+      if (!clash || lane >= 3) {
         pins.push({ x, y: baseY + lane * laneHeight, label, lane });
         break;
       }
@@ -205,11 +205,12 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
 
   const remarks = log.remarks;
   const remarksRulerY = GRID_TOP + GRID_H + 18;
-  // First-lane tick tip clears the REMARKS baseline; labels hang downward from there
-  const pinBaseY = remarksRulerY + 20;
+  // Short leader to tick tip; label baseline offset inside rotate() keeps glyphs below axis
+  const pinBaseY = remarksRulerY + 10;
   const pins = layoutRemarkPins(remarks, pinBaseY);
+  // Extra room for diagonal label length after rotate(55)
   const pinDepth =
-    pins.length > 0 ? Math.max(...pins.map((p) => p.y)) - pinBaseY + 70 : 36;
+    pins.length > 0 ? Math.max(...pins.map((p) => p.y)) - pinBaseY + 88 : 40;
 
   const shippingY = pinBaseY + pinDepth + 6;
   const recapY = shippingY + 28;
@@ -704,40 +705,39 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
         <TimeRuler y={remarksRulerY} showLabels={false} />
 
         {pins.map((pin, i) => {
-          // Tick tip = rotate origin; hanging baseline keeps glyphs entirely below
-          const ax = pin.x;
-          const ay = pin.y;
+          // Translate to tick tip, then rotate. Local y>0 puts alphabetic baseline
+          // below the tip so capital glyphs cannot cross the REMARKS axis.
+          const tipY = pin.y;
           return (
             <g key={`pin-${i}`}>
               <line
                 x1={pin.x}
                 y1={remarksRulerY}
                 x2={pin.x}
-                y2={ay}
+                y2={tipY}
                 stroke={RULE}
                 strokeWidth="0.85"
               />
               <line
                 x1={pin.x - 4}
-                y1={ay}
+                y1={tipY}
                 x2={pin.x + 4}
-                y2={ay}
+                y2={tipY}
                 stroke={RULE}
                 strokeWidth="0.85"
               />
-              <text
-                x={ax}
-                y={ay}
-                fontSize="9"
-                fill={INK}
-                fontFamily={FONT}
-                textAnchor="start"
-                dominantBaseline="hanging"
-                style={{ transformOrigin: `${ax}px ${ay}px` }}
-                transform={`rotate(55 ${ax} ${ay})`}
-              >
-                {pin.label}
-              </text>
+              <g transform={`translate(${pin.x}, ${tipY}) rotate(55)`}>
+                <text
+                  x={3}
+                  y={11}
+                  fontSize="9"
+                  fill={INK}
+                  fontFamily={FONT}
+                  textAnchor="start"
+                >
+                  {pin.label}
+                </text>
+              </g>
             </g>
           );
         })}
