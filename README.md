@@ -2,7 +2,7 @@
 
 Full-stack **React + Django** assessment app: plan a property-carrying trip under FMCSA-style **70h/8-day** HOS rules, show the route/stops on a map, and **draw** multi-day Driver’s Daily Logs.
 
-Specs: [HANDOFF.md](./HANDOFF.md) · [PRD.md](./PRD.md) · [TRD.md](./TRD.md) · [SYSTEM_ARCHITECTURE.md](./SYSTEM_ARCHITECTURE.md)
+Specs: [PROJECT_HANDOFF.md](./PROJECT_HANDOFF.md) · [LOOM_SCRIPT.md](./LOOM_SCRIPT.md) · [HANDOFF.md](./HANDOFF.md) · [PRD.md](./PRD.md) · [TRD.md](./TRD.md) · [SYSTEM_ARCHITECTURE.md](./SYSTEM_ARCHITECTURE.md)
 
 ## Features
 - Inputs: current / pickup / dropoff / cycle hours used (+ start time)
@@ -104,4 +104,4 @@ See **[SYSTEM_ARCHITECTURE.md §1.1](./SYSTEM_ARCHITECTURE.md)** for sequence + 
 - [x] Hosted Vercel URL — https://spotter-hamdan-ishfaqs-projects.vercel.app
 - [x] Shareable trip links (query-string, no DB)
 - [x] Print-friendly daily logs
-- [ ] Loom 3–5 minute walkthrough — see [LOOM_SCRIPT.md](./LOOM_SCRIPT.md) **(do this next)**
+- [ ] Loom 3–5 minute walkthrough — speak [LOOM_SCRIPT.md](./LOOM_SCRIPT.md) **(do this next)** · full handoff [PROJECT_HANDOFF.md](./PROJECT_HANDOFF.md)

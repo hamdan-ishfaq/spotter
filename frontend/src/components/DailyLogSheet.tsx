@@ -107,9 +107,53 @@ function pinDisplayLabel(label: string): string {
     .replace(/\bParish\b/gi, "Par.");
 }
 
+/** Compact duty hint when City, ST repeats across consecutive status changes. */
+function dutyHintFromRemark(text: string): string {
+  const t = text.trim().toLowerCase();
+  if (!t) {
+    return "Change";
+  }
+  if (t.includes("fuel")) {
+    return "Fuel";
+  }
+  if (t.includes("30-minute") || t.includes("30 minute") || t.includes("break")) {
+    return "Break";
+  }
+  if (t.includes("pre-trip") || t.includes("pretrip")) {
+    return "Pre-trip";
+  }
+  if (t.includes("pickup")) {
+    return "Pickup";
+  }
+  if (t.includes("dropoff") || t.includes("drop-off") || t.includes("drop off")) {
+    return "Dropoff";
+  }
+  if (t.includes("34") || t.includes("restart")) {
+    return "34h";
+  }
+  if (t.includes("sleeper") || t === "sb") {
+    return "SB";
+  }
+  if (t.includes("begin 10") || t.includes("post-trip")) {
+    return "Rest";
+  }
+  if (t.includes("off duty") || t.includes("off-duty")) {
+    return "Off";
+  }
+  if (t.includes("drive")) {
+    return "Drive";
+  }
+  if (t.includes("on duty")) {
+    return "ON";
+  }
+  return shortText(text.trim(), 12);
+}
+
 /**
- * Remarks timeline pins (FMCSA-style City, ST markers).
- * - One pin per location *change* (collapses back-to-back same-city events).
+ * Remarks timeline pins (FMCSA §395.8 — mark every duty-status change).
+ * - One pin per API remark (no same-city collapse).
+ * - When City, ST repeats, show a short duty hint (Fuel / Break / SB…) instead of
+ *   restamping the city, so dense same-stop clusters stay readable.
  * - Lane stagger + label-length-aware horizontal gap for close timestamps.
  */
 function layoutRemarkPins(remarks: Remark[], baseY: number) {
@@ -120,26 +164,34 @@ function layoutRemarkPins(remarks: Remark[], baseY: number) {
     lane: number;
     gap: number;
   }[] = [];
-  const laneHeight = 50;
-  const maxLanes = 5;
-  let lastLoc = "";
+  const laneHeight = 48;
+  const maxLanes = 7;
+  let lastCity = "";
 
   for (const remark of remarks) {
     const loc = (remark.location_label || "").trim();
-    const raw = loc && loc !== "—" ? loc : shortText(remark.text, 24);
-    if (!raw) {
+    const city =
+      loc && loc !== "—" ? pinDisplayLabel(loc) : "";
+    const hint = dutyHintFromRemark(remark.text || "");
+    // First pin at a city → City, ST; later changes at same city → duty hint
+    let label: string;
+    if (city && city !== lastCity) {
+      label = city;
+      lastCity = city;
+    } else if (city && city === lastCity) {
+      label = hint;
+    } else {
+      label = hint || shortText(remark.text || "", 16);
+      if (city) {
+        lastCity = city;
+      }
+    }
+    if (!label) {
       continue;
     }
-    const label = pinDisplayLabel(raw);
-    // Skip repeated same location (many duty changes at one stop)
-    if (label === lastLoc) {
-      continue;
-    }
-    lastLoc = label;
 
     const x = xAt(timeToMinute(remark.time));
-    // Diagonal ~55°: longer names need more horizontal clearance
-    const gap = Math.max(60, Math.min(150, label.length * 3.8));
+    const gap = Math.max(48, Math.min(130, label.length * 3.6));
 
     let lane = 0;
     for (;;) {
@@ -152,7 +204,7 @@ function layoutRemarkPins(remarks: Remark[], baseY: number) {
         if (p.lane === lane) {
           return true;
         }
-        if (Math.abs(p.lane - lane) === 1 && dx < need * 0.6) {
+        if (Math.abs(p.lane - lane) === 1 && dx < need * 0.55) {
           return true;
         }
         return false;

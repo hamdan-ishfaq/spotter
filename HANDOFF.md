@@ -1,9 +1,13 @@
 # HANDOFF — Spotter HOS Trip Planner
 
+> **Start here for submission / interview:** [`PROJECT_HANDOFF.md`](./PROJECT_HANDOFF.md)  
+> **Speak this for Loom:** [`LOOM_SCRIPT.md`](./LOOM_SCRIPT.md)  
+> This file is the longer internal architecture + runbook notes.
+
 **Owner / candidate:** Muhammad  
 **Purpose:** Single document so anyone (or a future you) can understand, run, test, deploy, and continue this assessment app.  
 **Date:** 2026-08-25  
-**Status:** Deployed live · unit + 116-case suite green · Loom remaining  
+**Status:** Deployed live · unit tests green (26) · Loom remaining  
 
 **Live app:** https://spotter-hamdan-ishfaqs-projects.vercel.app  
 **API:** https://spotter-hos-api-xb1g.onrender.com  

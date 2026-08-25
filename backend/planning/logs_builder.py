@@ -211,16 +211,6 @@ def build_daily_logs(
                 )
                 totals = _recompute_totals(padded)
 
-        for k in totals:
-            totals[k] = round(totals[k], 2)
-        diff = round(24.0 - sum(totals.values()), 2)
-        if abs(diff) >= 0.01:
-            # Prefer adjusting the longest OFF/SB total so grid and totals stay aligned
-            if totals["off"] >= totals["sb"]:
-                totals["off"] = round(totals["off"] + diff, 2)
-            else:
-                totals["sb"] = round(totals["sb"] + diff, 2)
-
         remarks: list[Remark] = []
         prev_status = None
         for idx, s in enumerate(padded):
@@ -276,6 +266,19 @@ def build_daily_logs(
                     bracket=bool(s.stationary and s.status == "ON"),
                 )
             )
+
+        # Totals must match drawn ink (grid), not a residual dumped into empty OFF
+        status_to_key = {"OFF": "off", "SB": "sb", "D": "drive", "ON": "on"}
+        totals = {"off": 0.0, "sb": 0.0, "drive": 0.0, "on": 0.0}
+        for g in grid:
+            totals[status_to_key[g.status]] += (g.end_minute - g.start_minute) / 60.0
+        for k in totals:
+            totals[k] = round(totals[k], 2)
+        diff = round(24.0 - sum(totals.values()), 2)
+        if abs(diff) >= 0.01:
+            # Adjust the status that actually has the most drawn hours
+            best = max(totals, key=lambda k: totals[k])
+            totals[best] = round(totals[best] + diff, 2)
 
         # From = where the day starts; To = where the day ends
         from_loc = padded[0].location_label
