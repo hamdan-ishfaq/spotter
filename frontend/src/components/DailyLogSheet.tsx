@@ -126,25 +126,48 @@ function UnderlineField({
   );
 }
 
-function layoutRemarks(remarks: Remark[], baseY: number) {
-  const slots: { x: number; y: number; remark: Remark; lane: number }[] = [];
-  const laneHeight = 52;
-  const minGap = 72;
+/** Location pins under the grid (FMCSA-style) — location only, collision-aware. */
+function layoutLocationPins(remarks: Remark[], baseY: number) {
+  const pins: { x: number; y: number; label: string; lane: number }[] = [];
+  const laneHeight = 44;
+  const minGap = 58;
+  let lastLoc = "";
 
   for (const remark of remarks) {
+    const label = (remark.location_label || "").trim();
+    if (!label || label === "—") {
+      continue;
+    }
+    // One pin per location change (matches completed FMCSA sample grids)
+    if (label === lastLoc) {
+      continue;
+    }
+    lastLoc = label;
     const x = xAt(timeToMinute(remark.time));
     let lane = 0;
     for (;;) {
-      const y = baseY + lane * laneHeight;
-      const clash = slots.some((s) => s.lane === lane && Math.abs(s.x - x) < minGap);
+      const clash = pins.some((p) => p.lane === lane && Math.abs(p.x - x) < minGap);
       if (!clash) {
-        slots.push({ x, y, remark, lane });
+        pins.push({ x, y: baseY + lane * laneHeight, label, lane });
         break;
       }
       lane += 1;
+      if (lane > 4) {
+        pins.push({ x, y: baseY + lane * laneHeight, label, lane });
+        break;
+      }
     }
   }
-  return slots;
+  return pins;
+}
+
+/** Shorten long remark text for the list. */
+function shortRemark(text: string): string {
+  const t = text.trim();
+  if (t.length <= 42) {
+    return t;
+  }
+  return `${t.slice(0, 40)}…`;
 }
 
 export function DailyLogSheet({ log }: { log: DailyLog }) {
@@ -153,13 +176,19 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
   const day = String(dateObj.getDate()).padStart(2, "0");
   const year = dateObj.getFullYear();
   const remarks = log.remarks;
-  const remarkBaseY = GRID_TOP + GRID_H + 36;
-  const remarkSlots = layoutRemarks(remarks, remarkBaseY + 28);
-  const remarkDepth =
-    remarkSlots.length > 0
-      ? Math.max(...remarkSlots.map((s) => s.y)) - remarkBaseY + 64
-      : 48;
-  const recapY = remarkBaseY + remarkDepth + 12;
+
+  const remarkTitleY = GRID_TOP + GRID_H + 28;
+  const pinBaseY = remarkTitleY + 22;
+  const pins = layoutLocationPins(remarks, pinBaseY);
+  const pinDepth =
+    pins.length > 0 ? Math.max(...pins.map((p) => p.y)) - pinBaseY + 52 : 28;
+
+  const listTop = pinBaseY + pinDepth + 8;
+  const LIST_ROW = 15;
+  const listCols = 2;
+  const listRows = Math.ceil(Math.max(remarks.length, 1) / listCols);
+  const listHeight = Math.max(listRows, 1) * LIST_ROW + 8;
+  const recapY = listTop + listHeight + 14;
   const RECAP_H = 118;
   const svgH = recapY + RECAP_H + 18;
 
@@ -183,16 +212,22 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
   log.grid_segments.forEach((g, idx) => {
     const x1 = xAt(g.start_minute);
     const y = yRow(g.status);
-    if (idx === 0) {
-      transitionDots.push({ x: x1, y });
-    }
     const prev = idx > 0 ? log.grid_segments[idx - 1] : null;
-    if (prev && prev.status !== g.status) {
+    if (!prev) {
+      transitionDots.push({ x: x1, y });
+      return;
+    }
+    if (prev.status !== g.status) {
+      // Corner at end of previous row + corner on new row (status change)
       transitionDots.push({ x: x1, y: yRow(prev.status) });
       transitionDots.push({ x: x1, y });
     }
-    transitionDots.push({ x: xAt(g.end_minute), y });
   });
+  // Final end-of-day point
+  const last = log.grid_segments[log.grid_segments.length - 1];
+  if (last) {
+    transitionDots.push({ x: xAt(last.end_minute), y: yRow(last.status) });
+  }
 
   return (
     <Box
@@ -596,7 +631,7 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
 
         <text
           x={GRID_LEFT}
-          y={remarkBaseY}
+          y={remarkTitleY}
           fontSize="12"
           fontWeight="700"
           fill={HEADER_BAR}
@@ -606,70 +641,101 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
         </text>
         <text
           x={GRID_LEFT + 78}
-          y={remarkBaseY}
+          y={remarkTitleY}
           fontSize="9"
           fill="#64748b"
           fontFamily="Arial, sans-serif"
         >
-          City / State at each change of duty status (home terminal time)
+          Location pins under timeline · full duty changes listed below (home terminal time)
         </text>
         <line
           x1={GRID_LEFT}
-          y1={remarkBaseY + 6}
+          y1={remarkTitleY + 6}
           x2={GRID_RIGHT}
-          y2={remarkBaseY + 6}
+          y2={remarkTitleY + 6}
           stroke={GRID_BLUE}
           strokeWidth="0.8"
         />
 
-        {remarkSlots.map(({ x, y, remark }, i) => {
+        {/* FMCSA-style location pins — City, ST only, staggered */}
+        {pins.map((pin, i) => {
           const bracketTop = GRID_TOP + GRID_H;
-          const label = remark.location_label || remark.text;
-          const detail = remark.location_label ? remark.text : "";
           return (
-            <g key={i}>
+            <g key={`pin-${i}`}>
               <line
-                x1={x}
+                x1={pin.x}
                 y1={bracketTop}
-                x2={x}
-                y2={y - 8}
+                x2={pin.x}
+                y2={pin.y - 4}
                 stroke={GRID_BLUE}
-                strokeWidth="1"
+                strokeWidth="1.1"
               />
               <line
-                x1={x - 4}
-                y1={y - 8}
-                x2={x + 4}
-                y2={y - 8}
+                x1={pin.x - 5}
+                y1={pin.y - 4}
+                x2={pin.x + 5}
+                y2={pin.y - 4}
                 stroke={GRID_BLUE}
-                strokeWidth="1"
+                strokeWidth="1.1"
               />
               <text
-                x={x + 6}
-                y={y}
+                x={pin.x + 4}
+                y={pin.y + 2}
                 fontSize="10"
-                fill={INK}
+                fill={DUTY_BLUE}
                 fontFamily="Arial, sans-serif"
                 fontWeight="600"
-                transform={`rotate(-55 ${x + 6} ${y})`}
+                transform={`rotate(-58 ${pin.x + 4} ${pin.y + 2})`}
               >
-                {label}
+                {pin.label}
               </text>
-              {detail ? (
-                <text
-                  x={x + 6}
-                  y={y + 14}
-                  fontSize="9"
-                  fill="#475569"
-                  fontFamily="Arial, sans-serif"
-                  transform={`rotate(-55 ${x + 6} ${y + 14})`}
-                >
-                  {remark.time} · {detail}
-                </text>
-              ) : null}
             </g>
           );
         })}
+
+        {/* Clean chronological list — no overlap */}
+        <rect
+          x={14}
+          y={listTop - 4}
+          width={W - 28}
+          height={listHeight + 4}
+          fill="#f8fafc"
+          stroke="#e2e8f0"
+          strokeWidth="0.6"
+          rx="2"
+        />
+        {remarks.length === 0 ? (
+          <text
+            x={24}
+            y={listTop + 12}
+            fontSize="10"
+            fill="#94a3b8"
+            fontFamily="Arial, sans-serif"
+          >
+            No duty-status changes this day
+          </text>
+        ) : (
+          remarks.map((r, i) => {
+            const col = i % listCols;
+            const row = Math.floor(i / listCols);
+            const colW = (W - 48) / listCols;
+            const x = 24 + col * colW;
+            const y = listTop + 12 + row * LIST_ROW;
+            return (
+              <text key={i} x={x} y={y} fontSize="10" fill={INK} fontFamily="Arial, sans-serif">
+                <tspan fill="#64748b" fontWeight="600">
+                  {r.time}
+                </tspan>
+                <tspan fill="#94a3b8">{"  ·  "}</tspan>
+                <tspan fontWeight="600" fill={DUTY_BLUE}>
+                  {r.location_label}
+                </tspan>
+                <tspan fill="#64748b">{"  —  "}</tspan>
+                <tspan fill="#334155">{shortRemark(r.text)}</tspan>
+              </text>
+            );
+          })
+        )}
 
         {/* Recap: FMCSA A/B/C style */}
         <rect

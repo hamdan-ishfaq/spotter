@@ -223,7 +223,22 @@ def build_daily_logs(
 
         remarks: list[Remark] = []
         prev_status = None
-        for s in padded:
+        for idx, s in enumerate(padded):
+            # Skip midnight / end-of-day padding filler (not a real duty change)
+            is_pad = (
+                s.stop_type is None
+                and (s.remark or "").strip().lower() in ("off duty", "off-duty", "")
+                and s.status == "OFF"
+                and s.stationary
+                and (
+                    (idx == 0 and s.start == day_start)
+                    or (idx == len(padded) - 1 and s.end == day_end)
+                )
+            )
+            if is_pad:
+                prev_status = s.status
+                continue
+
             status_changed = prev_status is None or s.status != prev_status
             important = s.stop_type in IMPORTANT_STOPS
             # FMCSA §395.8: city/state in Remarks on every change of duty status
