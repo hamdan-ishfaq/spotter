@@ -99,29 +99,59 @@ function hourLabel(h: number): string {
   return String(h);
 }
 
-/** Remarks pins: every event at its true timestamp; stagger lanes on collision. */
+/**
+ * Remarks timeline pins (FMCSA-style City, ST markers).
+ * - One pin per location *change* (collapses back-to-back same-city events).
+ * - Lane stagger + label-length-aware horizontal gap for close timestamps.
+ */
 function layoutRemarkPins(remarks: Remark[], baseY: number) {
   const pins: {
     x: number;
     y: number;
     label: string;
     lane: number;
+    gap: number;
   }[] = [];
-  const laneHeight = 40;
-  const minGap = 52;
+  const laneHeight = 48;
+  const maxLanes = 5;
+  let lastLoc = "";
 
   for (const remark of remarks) {
     const loc = (remark.location_label || "").trim();
-    const label = loc && loc !== "—" ? loc : shortText(remark.text, 22);
+    const label = loc && loc !== "—" ? loc : shortText(remark.text, 24);
     if (!label) {
       continue;
     }
+    // Skip repeated same location (many duty changes at one stop)
+    if (label === lastLoc) {
+      continue;
+    }
+    lastLoc = label;
+
     const x = xAt(timeToMinute(remark.time));
+    // Diagonal ~55°: longer names need more horizontal clearance
+    const gap = Math.max(56, Math.min(140, label.length * 3.6));
+
     let lane = 0;
     for (;;) {
-      const clash = pins.some((p) => p.lane === lane && Math.abs(p.x - x) < minGap);
-      if (!clash || lane >= 3) {
-        pins.push({ x, y: baseY + lane * laneHeight, label, lane });
+      const clash = pins.some((p) => {
+        const need = Math.max(gap, p.gap);
+        const dx = Math.abs(p.x - x);
+        if (dx >= need) {
+          return false;
+        }
+        // Same lane always clashes when too close
+        if (p.lane === lane) {
+          return true;
+        }
+        // Adjacent lanes still collide when almost on top of each other
+        if (Math.abs(p.lane - lane) === 1 && dx < need * 0.55) {
+          return true;
+        }
+        return false;
+      });
+      if (!clash || lane >= maxLanes - 1) {
+        pins.push({ x, y: baseY + lane * laneHeight, label, lane, gap });
         break;
       }
       lane += 1;
@@ -208,9 +238,9 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
   // Short leader to tick tip; label baseline offset inside rotate() keeps glyphs below axis
   const pinBaseY = remarksRulerY + 10;
   const pins = layoutRemarkPins(remarks, pinBaseY);
-  // Extra room for diagonal label length after rotate(55)
+  // Extra room for diagonal labels + multi-lane stagger on dense days
   const pinDepth =
-    pins.length > 0 ? Math.max(...pins.map((p) => p.y)) - pinBaseY + 88 : 40;
+    pins.length > 0 ? Math.max(...pins.map((p) => p.y)) - pinBaseY + 100 : 40;
 
   const shippingY = pinBaseY + pinDepth + 6;
   const recapY = shippingY + 28;
