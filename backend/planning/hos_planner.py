@@ -26,7 +26,7 @@ from .constants import (
 )
 from .exceptions import PlanIntegrityError, ValidationFailed
 from .geo import interpolate_along_route, nearly_same
-from .geocode import geocode_place
+from .geocode import geocode_place, reverse_geocode_label
 from .hos_verifier import verify
 from .instructions import build_instructions
 from .logs_builder import build_daily_logs
@@ -259,15 +259,19 @@ class Planner:
         self.geometry.extend(leg.geometry)
         miles_left = leg.distance_miles
         miles_done = 0.0
+        dest_label = leg.destination.label
         speed = leg.distance_miles / max(leg.duration_hours, 1e-6)
         if speed <= 1e-6:
             speed = AVG_SPEED_MPH
+
+        def here_label(pt: LatLng) -> str:
+            return reverse_geocode_label(pt, fallback=leg.origin.label)
 
         guard = 0
         while miles_left > 0.05 and guard < 500:
             guard += 1
             point = interpolate_along_route(leg, miles_done)
-            label = leg.destination.label
+            label = here_label(point)
 
             fuel_room = FUEL_EVERY_MILES - self.state.miles_since_fuel
             if fuel_room <= 0.05:
@@ -287,7 +291,6 @@ class Planner:
             # max hours legally left this window
             if self.state.window_start is None:
                 window_room = DUTY_WINDOW_HOURS
-                # but pretrip/on may open window — approximate with 14
             else:
                 elapsed = (self.state.t - self.state.window_start).total_seconds() / 3600.0
                 window_room = max(0.0, DUTY_WINDOW_HOURS - elapsed)
@@ -297,7 +300,6 @@ class Planner:
 
             max_h = min(window_room, drive11_room, break_room)
             if max_h <= 0.02:
-                # need break or reset
                 if break_room <= 0.02:
                     self.ensure_break_before_drive(0.1, point, label, fuel_due=fuel_room < 50)
                 else:
@@ -322,11 +324,10 @@ class Planner:
                 continue
 
             drive_h = max_mi / speed
-            # cycle check for this drive
             self.ensure_cycle(drive_h, point, label)
             self.ensure_window_for_drive(drive_h, point, label)
-            # recompute after possible reset
             point = interpolate_along_route(leg, miles_done)
+            label = here_label(point)
             if self.state.window_start is not None:
                 elapsed = (self.state.t - self.state.window_start).total_seconds() / 3600.0
                 window_room = max(0.0, DUTY_WINDOW_HOURS - elapsed)
@@ -335,7 +336,11 @@ class Planner:
                 max_h = min(window_room, drive11_room, break_room)
                 if max_h <= 0.02:
                     continue
-                max_mi = min(miles_left, FUEL_EVERY_MILES - self.state.miles_since_fuel, max_h * speed)
+                max_mi = min(
+                    miles_left,
+                    FUEL_EVERY_MILES - self.state.miles_since_fuel,
+                    max_h * speed,
+                )
                 if max_mi <= 0.05:
                     continue
                 drive_h = max_mi / speed
@@ -345,13 +350,14 @@ class Planner:
             self.ensure_pretrip(point, label)
 
             end_point = interpolate_along_route(leg, miles_done + max_mi)
+            end_label = here_label(end_point)
             self._emit(
                 "D",
                 drive_h,
                 miles=max_mi,
                 point=end_point,
-                label=label,
-                remark=f"Drive toward {leg.destination.label}",
+                label=end_label,
+                remark=f"Drive toward {dest_label}",
                 stop_type=None,
                 stationary=False,
             )
@@ -360,12 +366,13 @@ class Planner:
 
             if self.state.miles_since_fuel >= FUEL_EVERY_MILES - 0.05:
                 fp = interpolate_along_route(leg, miles_done)
-                self.ensure_cycle(FUEL_DURATION_HOURS, fp, label)
+                fl = here_label(fp)
+                self.ensure_cycle(FUEL_DURATION_HOURS, fp, fl)
                 self._emit(
                     "ON",
                     FUEL_DURATION_HOURS,
                     point=fp,
-                    label=label,
+                    label=fl,
                     remark="Fuel stop",
                     stop_type="fuel",
                     stationary=True,

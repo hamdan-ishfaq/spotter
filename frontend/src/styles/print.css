@@ -3,8 +3,17 @@
     display: none !important;
   }
 
-  .daily-log-sheet {
+  .daily-log-print-page {
     break-after: page;
     page-break-after: always;
+  }
+
+  .daily-log-print-page:last-of-type {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .daily-log-sheet {
+    break-inside: avoid;
   }
 }

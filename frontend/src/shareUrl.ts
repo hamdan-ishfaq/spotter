@@ -18,7 +18,7 @@ export function searchParamsToPlan(params: URLSearchParams): PlanRequest | null 
   const pickup = params.get("p")?.trim();
   const dropoff = params.get("d")?.trim();
   const cycleRaw = params.get("cycle");
-  if (!current || !pickup || !dropoff || cycleRaw === null) {
+  if (!current || !pickup || !dropoff || cycleRaw === null || cycleRaw.trim() === "") {
     return null;
   }
   const cycle = Number(cycleRaw);

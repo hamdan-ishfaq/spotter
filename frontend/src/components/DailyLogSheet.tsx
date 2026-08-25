@@ -52,11 +52,14 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
   const month = dateObj.getMonth() + 1;
   const day = dateObj.getDate();
   const year = dateObj.getFullYear();
+  const remarks = log.remarks;
+  const remarkBlock = Math.max(remarks.length, 1) * 14;
+  const svgH = Math.max(520, GRID_TOP + GRID_H + 70 + remarkBlock + 40);
 
   return (
     <Box className="daily-log-sheet" sx={{ bgcolor: "#FFFdf8", border: "1px solid #1a1a1a", p: 1, overflow: "auto" }}>
-      <svg viewBox={`0 0 ${W} 520`} width="100%" role="img" aria-label={`Daily log ${log.date}`}>
-        <rect x="0" y="0" width={W} height="520" fill="#FFFdf8" />
+      <svg viewBox={`0 0 ${W} ${svgH}`} width="100%" role="img" aria-label={`Daily log ${log.date}`}>
+        <rect x="0" y="0" width={W} height={svgH} fill="#FFFdf8" />
         <text x="16" y="28" fontFamily="Georgia, serif" fontSize="20" fontWeight="700" fill="#15202B">
           Drivers Daily Log (24 hours)
         </text>
@@ -76,7 +79,6 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
           I certify that these entries are true and correct — {log.header.driver_name}
         </text>
 
-        {/* time axis */}
         <rect x={GRID_LEFT} y={GRID_TOP - 18} width={GRID_W} height="16" fill="#1B3A4B" />
         {Array.from({ length: 25 }, (_, h) => {
           const x = xAt(h * 60);
@@ -91,13 +93,11 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
             </g>
           );
         })}
-        {/* 15-min ticks */}
         {Array.from({ length: 96 }, (_, i) => {
           const x = xAt(i * 15);
           return <line key={`t${i}`} x1={x} y1={GRID_TOP} x2={x} y2={GRID_TOP + 4} stroke="#999" strokeWidth="0.5" />;
         })}
 
-        {/* row labels + lines */}
         {ROW_LABELS.map((label, i) => {
           const y = GRID_TOP + i * ROW_H;
           return (
@@ -111,7 +111,6 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
         })}
         <rect x={GRID_LEFT} y={GRID_TOP} width={GRID_W} height={GRID_H} fill="none" stroke="#111" strokeWidth="1.5" />
 
-        {/* duty lines + connectors + brackets */}
         {log.grid_segments.map((g, idx) => {
           const y = yRow(g.status);
           const x1 = xAt(g.start_minute);
@@ -142,7 +141,6 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
           );
         })}
 
-        {/* totals */}
         <text x={GRID_RIGHT + 8} y={GRID_TOP - 6} fontSize="10" fill="#333">
           Totals
         </text>
@@ -162,18 +160,16 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
           ={(log.totals.off + log.totals.sb + log.totals.drive + log.totals.on).toFixed(2)}
         </text>
 
-        {/* remarks */}
         <text x="16" y={GRID_TOP + GRID_H + 40} fontSize="13" fontWeight="700" fill="#15202B">
           Remarks
         </text>
-        {log.remarks.slice(0, 10).map((r, i) => (
+        {remarks.map((r, i) => (
           <text key={i} x="16" y={GRID_TOP + GRID_H + 58 + i * 14} fontSize="11" fill="#333">
             {r.time} — {r.location_label} — {r.text}
           </text>
         ))}
 
-        {/* recap */}
-        <text x="16" y="490" fontSize="11" fill="#333">
+        <text x="16" y={svgH - 20} fontSize="11" fill="#333">
           Recap (70/8 approx): on-duty today {log.recap.on_duty_today}h · cycle rem start {log.recap.cycle_remaining_start} · end{" "}
           {log.recap.cycle_remaining_end} · {log.recap.note}
         </text>

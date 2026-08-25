@@ -37,3 +37,4 @@ class TTLCache:
 
 geocode_cache = TTLCache(maxsize=256, ttl_seconds=86400)
 autocomplete_cache = TTLCache(maxsize=256, ttl_seconds=86400)
+reverse_cache = TTLCache(maxsize=512, ttl_seconds=86400)

@@ -53,8 +53,12 @@ def build_instructions(timeline: list[DutySegment]) -> list[Instruction]:
             text = f"34-hour restart (cycle reset) — {seg.location_label}"
         elif seg.status == "D":
             action = "drive"
+            dest = seg.location_label
+            if seg.remark and seg.remark.lower().startswith("drive toward "):
+                dest = seg.remark[len("Drive toward ") :]
             text = (
-                f"Drive {_h(seg):.2f} h ({seg.miles:.1f} mi) toward {seg.location_label}"
+                f"Drive {_h(seg):.2f} h ({seg.miles:.1f} mi) toward {dest}"
+                f" — at {seg.location_label}"
             )
         else:
             continue

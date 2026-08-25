@@ -23,6 +23,17 @@ from .types import DailyLog, DutySegment, GridSeg, Remark
 
 TZ = ZoneInfo(HOME_TERMINAL_TZ)
 
+IMPORTANT_STOPS = {
+    "pickup",
+    "dropoff",
+    "fuel",
+    "pretrip",
+    "break_30",
+    "rest_off",
+    "rest_sb",
+    "restart_34",
+}
+
 
 def _hours(seg: DutySegment) -> float:
     return (seg.end - seg.start).total_seconds() / 3600.0
@@ -66,6 +77,51 @@ def _snap_minute(minute: float) -> int:
     return int(round(minute / step) * step)
 
 
+def _recompute_totals(padded: list[DutySegment]) -> dict[str, float]:
+    totals = {"off": 0.0, "sb": 0.0, "drive": 0.0, "on": 0.0}
+    for s in padded:
+        h = _hours(s)
+        if s.status == "OFF":
+            totals["off"] += h
+        elif s.status == "SB":
+            totals["sb"] += h
+        elif s.status == "D":
+            totals["drive"] += h
+        else:
+            totals["on"] += h
+    return totals
+
+
+def _track_cycle_by_day(
+    timeline: list[DutySegment], cycle_used_at_start: float
+) -> tuple[dict, dict]:
+    """Walk every calendar day covered by the timeline for accurate recap."""
+    cycle = CYCLE_LIMIT_HOURS - cycle_used_at_start
+    cycle_by_day_start: dict = {}
+    cycle_by_day_end: dict = {}
+
+    for seg in timeline:
+        cursor = seg.start.astimezone(TZ)
+        end = seg.end.astimezone(TZ)
+        while cursor < end:
+            d = cursor.date()
+            if d not in cycle_by_day_start:
+                cycle_by_day_start[d] = cycle
+            day_end = datetime(d.year, d.month, d.day, tzinfo=TZ) + timedelta(days=1)
+            slice_end = min(end, day_end)
+            h = (slice_end - cursor).total_seconds() / 3600.0
+            if seg.status in ("D", "ON"):
+                cycle -= h
+            cycle_by_day_end[d] = cycle
+            cursor = slice_end
+        if seg.stop_type == "restart_34":
+            cycle = CYCLE_LIMIT_HOURS
+            d = (seg.end - timedelta(seconds=1)).astimezone(TZ).date()
+            cycle_by_day_end[d] = cycle
+
+    return cycle_by_day_start, cycle_by_day_end
+
+
 def build_daily_logs(
     timeline: list[DutySegment],
     cycle_used_at_start: float,
@@ -78,19 +134,9 @@ def build_daily_logs(
     for seg in split:
         by_day[seg.start.astimezone(TZ).date()].append(seg)
 
-    # Track cycle remaining through original timeline for recap
-    cycle = CYCLE_LIMIT_HOURS - cycle_used_at_start
-    cycle_by_day_start: dict = {}
-    cycle_by_day_end: dict = {}
-    for seg in timeline:
-        d = seg.start.astimezone(TZ).date()
-        if d not in cycle_by_day_start:
-            cycle_by_day_start[d] = cycle
-        if seg.status in ("D", "ON"):
-            cycle -= _hours(seg)
-        if seg.stop_type == "restart_34":
-            cycle = CYCLE_LIMIT_HOURS
-        cycle_by_day_end[d] = cycle
+    cycle_by_day_start, cycle_by_day_end = _track_cycle_by_day(
+        timeline, cycle_used_at_start
+    )
 
     logs: list[DailyLog] = []
     for day in sorted(by_day.keys()):
@@ -98,7 +144,6 @@ def build_daily_logs(
         day_start = datetime(day.year, day.month, day.day, tzinfo=TZ)
         day_end = day_start + timedelta(days=1)
 
-        # Pad OFF to fill 00:00 → first segment and last → 24:00
         padded: list[DutySegment] = []
         if segs[0].start > day_start:
             padded.append(
@@ -130,19 +175,7 @@ def build_daily_logs(
                 )
             )
 
-        totals = {"off": 0.0, "sb": 0.0, "drive": 0.0, "on": 0.0}
-        for s in padded:
-            h = _hours(s)
-            if s.status == "OFF":
-                totals["off"] += h
-            elif s.status == "SB":
-                totals["sb"] += h
-            elif s.status == "D":
-                totals["drive"] += h
-            else:
-                totals["on"] += h
-
-        # Reconcile to 24.00 on longest OFF/SB
+        totals = _recompute_totals(padded)
         drift = 24.0 - sum(totals.values())
         if abs(drift) > 1e-6:
             rest_idxs = [
@@ -152,8 +185,9 @@ def build_daily_logs(
                 i = max(rest_idxs, key=lambda idx: _hours(padded[idx]))
                 s = padded[i]
                 new_end = s.end + timedelta(hours=drift)
-                # keep within day
-                new_end = min(max(new_end, s.start + timedelta(minutes=1)), day_end)
+                # Keep within day and before next segment
+                next_start = padded[i + 1].start if i + 1 < len(padded) else day_end
+                new_end = min(max(new_end, s.start + timedelta(minutes=1)), next_start, day_end)
                 padded[i] = DutySegment(
                     status=s.status,
                     start=s.start,
@@ -165,37 +199,45 @@ def build_daily_logs(
                     stop_type=s.stop_type,
                     stationary=s.stationary,
                 )
-                totals = {"off": 0.0, "sb": 0.0, "drive": 0.0, "on": 0.0}
-                for s2 in padded:
-                    h = _hours(s2)
-                    if s2.status == "OFF":
-                        totals["off"] += h
-                    elif s2.status == "SB":
-                        totals["sb"] += h
-                    elif s2.status == "D":
-                        totals["drive"] += h
-                    else:
-                        totals["on"] += h
+                totals = _recompute_totals(padded)
 
         for k in totals:
             totals[k] = round(totals[k], 2)
-        # final nudge
         diff = round(24.0 - sum(totals.values()), 2)
         if abs(diff) >= 0.01:
-            totals["off"] = round(totals["off"] + diff, 2)
+            # Prefer adjusting the longest OFF/SB total so grid and totals stay aligned
+            if totals["off"] >= totals["sb"]:
+                totals["off"] = round(totals["off"] + diff, 2)
+            else:
+                totals["sb"] = round(totals["sb"] + diff, 2)
 
         remarks: list[Remark] = []
         prev_status = None
+        prev_stop = None
         for s in padded:
-            if s.status != prev_status and s.remark:
-                remarks.append(
-                    Remark(
-                        time=s.start.strftime("%H:%M"),
-                        location_label=s.location_label,
-                        text=s.remark,
+            if not s.remark:
+                prev_status = s.status
+                prev_stop = s.stop_type
+                continue
+            changed = s.status != prev_status or s.stop_type != prev_stop
+            important = s.stop_type in IMPORTANT_STOPS
+            if changed or important:
+                # Deduplicate identical consecutive remarks
+                if not (
+                    remarks
+                    and remarks[-1].time == s.start.strftime("%H:%M")
+                    and remarks[-1].text == s.remark
+                    and remarks[-1].location_label == s.location_label
+                ):
+                    remarks.append(
+                        Remark(
+                            time=s.start.strftime("%H:%M"),
+                            location_label=s.location_label,
+                            text=s.remark,
+                        )
                     )
-                )
             prev_status = s.status
+            prev_stop = s.stop_type
 
         grid: list[GridSeg] = []
         for s in padded:
@@ -214,14 +256,19 @@ def build_daily_logs(
                 )
             )
 
-        work_labels = [
-            s.location_label
-            for s in padded
-            if s.stop_type in ("pickup", "dropoff", "fuel", "pretrip")
-            or s.status == "D"
-        ]
-        from_loc = work_labels[0] if work_labels else padded[0].location_label
-        to_loc = work_labels[-1] if work_labels else padded[-1].location_label
+        # From = where the day starts; To = where the day ends
+        from_loc = padded[0].location_label
+        to_loc = padded[-1].location_label
+        # Prefer first/last meaningful movement/work if present
+        for s in padded:
+            if s.stop_type in ("pickup", "dropoff", "fuel", "pretrip") or s.status == "D":
+                from_loc = s.location_label
+                break
+        for s in reversed(padded):
+            if s.stop_type in ("pickup", "dropoff", "fuel", "pretrip") or s.status == "D":
+                to_loc = s.location_label
+                break
+
         miles = round(sum(s.miles for s in padded), 1)
         on_duty_today = round(totals["drive"] + totals["on"], 2)
 
@@ -237,11 +284,14 @@ def build_daily_logs(
                 recap={
                     "on_duty_today": on_duty_today,
                     "cycle_remaining_start": round(
-                        cycle_by_day_start.get(day, CYCLE_LIMIT_HOURS - cycle_used_at_start),
+                        cycle_by_day_start.get(
+                            day, CYCLE_LIMIT_HOURS - cycle_used_at_start
+                        ),
                         2,
                     ),
                     "cycle_remaining_end": round(
-                        cycle_by_day_end.get(day, cycle), 2
+                        cycle_by_day_end.get(day, CYCLE_LIMIT_HOURS - cycle_used_at_start),
+                        2,
                     ),
                     "note": "Approximate — full 8-day history not provided",
                 },

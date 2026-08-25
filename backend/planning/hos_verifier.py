@@ -192,7 +192,7 @@ def verify(timeline: list[DutySegment], cycle_used_at_start: float) -> list[Viol
                     )
                 )
 
-            if miles_since_fuel - HOUR_TOLERANCE > FUEL_EVERY_MILES:
+            if miles_since_fuel - 0.5 > FUEL_EVERY_MILES:
                 violations.append(
                     Violation(
                         "FUEL_1000",
@@ -202,7 +202,7 @@ def verify(timeline: list[DutySegment], cycle_used_at_start: float) -> list[Viol
                 )
 
             projected_miles = miles_since_fuel + seg.miles
-            if projected_miles - HOUR_TOLERANCE > FUEL_EVERY_MILES:
+            if projected_miles - 0.5 > FUEL_EVERY_MILES:
                 violations.append(
                     Violation(
                         "FUEL_1000",

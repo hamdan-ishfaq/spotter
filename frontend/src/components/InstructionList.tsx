@@ -7,6 +7,7 @@ import {
   Typography,
   Paper,
 } from "@mui/material";
+import { HOME_TERMINAL_TZ } from "../constants";
 
 export type Instruction = {
   seq: number;
@@ -59,6 +60,7 @@ export function InstructionList({ items, selectedSeq, onSelect }: Props) {
 function formatTime(iso: string) {
   try {
     return new Date(iso).toLocaleString("en-US", {
+      timeZone: HOME_TERMINAL_TZ,
       month: "short",
       day: "numeric",
       hour: "2-digit",

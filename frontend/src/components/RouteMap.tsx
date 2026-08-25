@@ -49,6 +49,16 @@ function FitBounds({ geometry }: { geometry: [number, number][] }) {
   return null;
 }
 
+function PanToHighlight({ highlight }: { highlight?: { lat: number; lng: number } | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (highlight?.lat != null && highlight?.lng != null) {
+      map.panTo([highlight.lat, highlight.lng], { animate: true });
+    }
+  }, [highlight, map]);
+  return null;
+}
+
 export function RouteMap({ geometry, stops, highlight }: Props) {
   const center: [number, number] =
     geometry[0] ?? ([39.5, -98.35] as [number, number]);
@@ -64,6 +74,7 @@ export function RouteMap({ geometry, stops, highlight }: Props) {
           <Polyline positions={geometry} pathOptions={{ color: "#1B3A4B", weight: 4, opacity: 0.85 }} />
         )}
         <FitBounds geometry={geometry} />
+        <PanToHighlight highlight={highlight} />
         {stops
           .filter((s) => s.lat != null && s.lng != null)
           .map((s, i) => (

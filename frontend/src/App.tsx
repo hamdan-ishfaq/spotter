@@ -251,7 +251,7 @@ export default function App() {
             </Grid>
           </Grid>
 
-          <Typography variant="h3" sx={{ fontSize: "1.4rem", mb: 1 }}>
+          <Typography variant="h3" sx={{ fontSize: "1.4rem", mb: 1 }} className="no-print">
             Daily log sheets
           </Typography>
           <Tabs
@@ -268,7 +268,7 @@ export default function App() {
           {dailyLogs.map((log, i) => (
             <Box
               key={log.date}
-              className="daily-log-sheet"
+              className="daily-log-print-page"
               sx={{
                 display: logTab === i ? "block" : "none",
                 "@media print": { display: "block !important" },
