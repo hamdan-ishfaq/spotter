@@ -205,10 +205,11 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
 
   const remarks = log.remarks;
   const remarksRulerY = GRID_TOP + GRID_H + 18;
-  const pinBaseY = remarksRulerY + 16;
+  // Keep pin origins below the REMARKS baseline so rotated labels hang downward
+  const pinBaseY = remarksRulerY + 14;
   const pins = layoutRemarkPins(remarks, pinBaseY);
   const pinDepth =
-    pins.length > 0 ? Math.max(...pins.map((p) => p.y)) - pinBaseY + 46 : 36;
+    pins.length > 0 ? Math.max(...pins.map((p) => p.y)) - pinBaseY + 62 : 36;
 
   const shippingY = pinBaseY + pinDepth + 6;
   const recapY = shippingY + 28;
@@ -702,36 +703,42 @@ export function DailyLogSheet({ log }: { log: DailyLog }) {
         </text>
         <TimeRuler y={remarksRulerY} showLabels={false} />
 
-        {pins.map((pin, i) => (
-          <g key={`pin-${i}`}>
-            <line
-              x1={pin.x}
-              y1={remarksRulerY}
-              x2={pin.x}
-              y2={pin.y - 2}
-              stroke={RULE}
-              strokeWidth="0.85"
-            />
-            <line
-              x1={pin.x - 4}
-              y1={pin.y - 2}
-              x2={pin.x + 4}
-              y2={pin.y - 2}
-              stroke={RULE}
-              strokeWidth="0.85"
-            />
-            <text
-              x={pin.x + 3}
-              y={pin.y + 1}
-              fontSize="9"
-              fill={INK}
-              fontFamily={FONT}
-              transform={`rotate(-55 ${pin.x + 3} ${pin.y + 1})`}
-            >
-              {pin.label}
-            </text>
-          </g>
-        ))}
+        {pins.map((pin, i) => {
+          // Anchor just below the REMARKS axis; clockwise rotate hangs text down
+          const ax = pin.x + 2;
+          const ay = pin.y + 10;
+          return (
+            <g key={`pin-${i}`}>
+              <line
+                x1={pin.x}
+                y1={remarksRulerY}
+                x2={pin.x}
+                y2={ay}
+                stroke={RULE}
+                strokeWidth="0.85"
+              />
+              <line
+                x1={pin.x - 4}
+                y1={ay}
+                x2={pin.x + 4}
+                y2={ay}
+                stroke={RULE}
+                strokeWidth="0.85"
+              />
+              <text
+                x={ax}
+                y={ay}
+                fontSize="9"
+                fill={INK}
+                fontFamily={FONT}
+                style={{ transformOrigin: `${ax}px ${ay}px` }}
+                transform={`rotate(55 ${ax} ${ay})`}
+              >
+                {pin.label}
+              </text>
+            </g>
+          );
+        })}
 
         {/* Pro / Shipping No. */}
         <text x={MARGIN} y={shippingY + 12} fontSize="8" fill={MUTED} fontFamily={FONT}>
